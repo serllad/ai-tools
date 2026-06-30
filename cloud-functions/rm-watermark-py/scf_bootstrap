@@ -1,0 +1,3 @@
+#!/bin/bash
+# SCF 自启动文件 - Python3
+/var/lang/python3/bin/python3 main.py
