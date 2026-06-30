@@ -41,7 +41,7 @@ export default function App() {
     setThemePersist(next);
   };
 
-  const isHome = location.pathname === '/';
+  const isHome = location.pathname === '/' || location.hash === '#/';
 
   return (
     <div className="flex flex-col h-full bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100">
