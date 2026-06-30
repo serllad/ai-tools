@@ -1,17 +1,21 @@
 /**
  * 图像去水印 - HTTP Cloud Function
- * 调用 Python OpenCV 后端处理图片
+ * 调用本地 Python OpenCV 服务处理图片
  */
 const http = require('http');
+const https = require('https');
 const { URL } = require('url');
-const { spawn } = require('child_process');
-const path = require('path');
 
 const CORS_HEADERS = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Methods': 'POST, OPTIONS',
   'Access-Control-Allow-Headers': 'Content-Type',
 };
+
+// 本地 OpenCV 服务的公网地址
+const WATERMARK_API = 'http://49.233.191.103:8900';
+// 从环境变量读取 token，用于调用本地 OpenCV 服务
+const AUTH_TOKEN = process.env.WATERMARK_TOKEN || 'ai-tools-default-token';
 
 function sendJson(res, statusCode, data) {
   const body = JSON.stringify(data);
@@ -38,79 +42,43 @@ function readBody(req) {
 }
 
 /**
- * 调用 Python OpenCV 处理图像去水印
+ * 调用本地 Python OpenCV 服务
  */
-function callPythonOpenCV(imageBase64) {
+function callWatermarkService(imageBase64) {
   return new Promise((resolve, reject) => {
-    const script = `
-import cv2
-import numpy as np
-import base64
-import json
-import sys
+    const body = JSON.stringify({ image: `data:image/png;base64,${imageBase64}` });
 
-def process(image_b64):
-    try:
-        # 解码
-        img_bytes = base64.b64decode(image_b64)
-        img_array = np.frombuffer(img_bytes, np.uint8)
-        img = cv2.imdecode(img_array, cv2.IMREAD_COLOR)
-        h, w = img.shape[:2]
+    const url = new URL(WATERMARK_API);
+    const client = url.protocol === 'https:' ? https : http;
+    const options = {
+      hostname: url.hostname,
+      port: url.port,
+      path: url.pathname || '/',
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Content-Length': Buffer.byteLength(body),
+        'X-Auth-Token': AUTH_TOKEN,
+      },
+      timeout: 30000,
+    };
 
-        # 自动检测水印区域
-        regions = []
-        bh = max(40, int(h * 0.12))
-        bw = max(80, int(w * 0.5))
-        regions.append((int((w - bw) / 2), h - bh, bw, bh))
-
-        cs = max(50, int(min(w, h) * 0.1))
-        for rx, ry in [(w - cs, h - cs), (w - cs, 0), (0, 0), (0, h - cs)]:
-            regions.append((rx, ry, cs, cs))
-
-        # 创建蒙版
-        mask = np.zeros((h, w), dtype=np.uint8)
-        for rx, ry, rw, rh in regions:
-            cv2.rectangle(mask, (rx, ry), (rx + rw, ry + rh), 255, -1)
-
-        kernel = np.ones((5, 5), np.uint8)
-        mask = cv2.dilate(mask, kernel, iterations=2)
-
-        # 修复
-        result = cv2.inpaint(img, mask, 5, cv2.INPAINT_TELEA)
-
-        # 编码
-        _, buffer = cv2.imencode('.png', result)
-        result_b64 = base64.b64encode(buffer).decode('utf-8')
-        return json.dumps({"image": f"data:image/png;base64,{result_b64}"})
-
-    except Exception as e:
-        return json.dumps({"error": str(e)})
-
-print(process(sys.argv[1]))
-`;
-
-    const proc = spawn('python3', ['-c', script, imageBase64], {
-      timeout: 60000,
-      maxBuffer: 20 * 1024 * 1024,
+    const req = client.request(options, (res) => {
+      let data = '';
+      res.on('data', (chunk) => { data += chunk; });
+      res.on('end', () => {
+        try {
+          resolve(JSON.parse(data));
+        } catch (e) {
+          reject(new Error(`响应解析失败: ${data.slice(0, 200)}`));
+        }
+      });
     });
 
-    let stdout = '';
-    let stderr = '';
-
-    proc.stdout.on('data', (data) => { stdout += data.toString(); });
-    proc.stderr.on('data', (data) => { stderr += data.toString(); });
-    proc.on('close', (code) => {
-      if (code !== 0) {
-        reject(new Error(`Python 进程退出(${code}): ${stderr.slice(0, 500)}`));
-        return;
-      }
-      try {
-        resolve(JSON.parse(stdout.trim()));
-      } catch {
-        reject(new Error(`Python 输出解析失败: ${stdout.slice(0, 200)}`));
-      }
-    });
-    proc.on('error', reject);
+    req.on('error', reject);
+    req.on('timeout', () => { req.destroy(); reject(new Error('请求超时')); });
+    req.write(body);
+    req.end();
   });
 }
 
@@ -134,12 +102,11 @@ const server = http.createServer(async (req, res) => {
         return;
       }
 
-      // Extract raw base64
       const base64Data = image.includes('base64,')
         ? image.split('base64,')[1]
         : image;
 
-      const result = await callPythonOpenCV(base64Data);
+      const result = await callWatermarkService(base64Data);
 
       if (result.error) {
         sendJson(res, 500, { error: result.error });

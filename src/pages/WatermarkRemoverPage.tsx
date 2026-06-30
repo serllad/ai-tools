@@ -2,6 +2,8 @@ import { useState, useRef } from 'react';
 
 type Status = 'idle' | 'ready' | 'uploading' | 'processing' | 'done' | 'error';
 
+// 通过 CloudBase 云函数调用本地 OpenCV 服务
+// 需要先激活 HTTPService：控制台 → 云函数 → HTTP Service → 开通
 const API_URL = 'https://wh001-d0gpvirgcdeafc90c.service.tcloudbase.com/remove-watermark';
 
 export default function WatermarkRemoverPage() {
