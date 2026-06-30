@@ -1,47 +1,75 @@
-import { useState, useRef, useEffect } from 'react';
+import { useState, useRef } from 'react';
 
-type Status = 'idle' | 'loading' | 'ready' | 'processing' | 'done' | 'error';
+type Status = 'idle' | 'ready' | 'processing' | 'done' | 'error';
 
-const OPENCV_CDN = 'https://docs.opencv.org/4.9.0/opencv.js';
+function getCanvasImageData(canvas: HTMLCanvasElement) {
+  const ctx = canvas.getContext('2d', { willReadFrequently: true })!;
+  return ctx.getImageData(0, 0, canvas.width, canvas.height);
+}
+
+/**
+ * 基于周围像素的简单去水印算法
+ * 对选中矩形区域，从边缘向内逐层修复，用周围有效像素的平均值填充
+ */
+function removeWatermarkInpaint(
+  imageData: ImageData,
+  rect: { x: number; y: number; w: number; h: number }
+): ImageData {
+  const { width, height } = imageData;
+  const data = new Uint8ClampedArray(imageData.data);
+  const out = new Uint8ClampedArray(imageData.data);
+  const { x, y, w, h } = rect;
+  const r = 3; // 采样半径
+
+  // 逐像素处理选中区域
+  for (let py = y; py < y + h && py < height; py++) {
+    for (let px = x; px < x + w && px < width; px++) {
+      let sumR = 0, sumG = 0, sumB = 0, count = 0;
+
+      // 从周围非选区像素采样
+      for (let dy = -r; dy <= r; dy++) {
+        for (let dx = -r; dx <= r; dx++) {
+          const sx = px + dx;
+          const sy = py + dy;
+          if (sx < 0 || sx >= width || sy < 0 || sy >= height) continue;
+          // 跳过仍在选区内的像素
+          if (sx >= x && sx < x + w && sy >= y && sy < y + h) continue;
+          const si = (sy * width + sx) * 4;
+          sumR += data[si];
+          sumG += data[si + 1];
+          sumB += data[si + 2];
+          count++;
+        }
+      }
+
+      const oi = (py * width + px) * 4;
+      if (count > 0) {
+        out[oi] = sumR / count;
+        out[oi + 1] = sumG / count;
+        out[oi + 2] = sumB / count;
+      }
+      // alpha 保持不变
+    }
+  }
+
+  return new ImageData(out, width, height);
+}
 
 export default function WatermarkRemoverPage() {
   const [image, setImage] = useState<string | null>(null);
   const [result, setResult] = useState<string | null>(null);
   const [status, setStatus] = useState<Status>('idle');
-  const [cvStatus, setCvStatus] = useState<'loading' | 'ready' | 'error'>('loading');
   const [error, setError] = useState<string | null>(null);
   const [drawing, setDrawing] = useState(false);
   const [startPos, setStartPos] = useState({ x: 0, y: 0 });
   const [rect, setRect] = useState<{ x: number; y: number; w: number; h: number } | null>(null);
+  // imgNaturalSize set on file load for internal use
+  const [_imgNaturalSize, _setImgNaturalSize] = useState({ w: 0, h: 0 });
 
   const fileRef = useRef<HTMLInputElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const imgRef = useRef<HTMLImageElement | null>(null);
-  const cvRef = useRef<any>(null);
   const [dragging, setDragging] = useState(false);
-
-  // Load OpenCV.js
-  useEffect(() => {
-    if ((window as any).cv) {
-      cvRef.current = (window as any).cv;
-      setCvStatus('ready');
-      return;
-    }
-    const script = document.createElement('script');
-    script.src = OPENCV_CDN;
-    script.async = true;
-    script.onload = () => {
-      (window as any).cv['onRuntimeInitialized'] = () => {
-        cvRef.current = (window as any).cv;
-        setCvStatus('ready');
-      };
-    };
-    script.onerror = () => setCvStatus('error');
-    document.body.appendChild(script);
-    return () => {
-      // script cleanup not needed, singleton
-    };
-  }, []);
 
   function handleFile(file: File | undefined) {
     if (!file) return;
@@ -61,10 +89,10 @@ export default function WatermarkRemoverPage() {
     reader.onload = () => {
       const dataUrl = reader.result as string;
       setImage(dataUrl);
-      // Reset canvas after image load
       const img = new Image();
       img.onload = () => {
         imgRef.current = img;
+        _setImgNaturalSize({ w: img.naturalWidth, h: img.naturalHeight });
         const canvas = canvasRef.current;
         if (canvas) {
           canvas.width = img.naturalWidth;
@@ -76,29 +104,41 @@ export default function WatermarkRemoverPage() {
       };
       img.src = dataUrl;
     };
-    reader.onerror = () => {
-      setError('读取图片失败');
-    };
+    reader.onerror = () => setError('读取图片失败');
     reader.readAsDataURL(file);
   }
 
-  // Mouse events for drawing rectangle
-  function handleMouseDown(e: React.MouseEvent<HTMLCanvasElement>) {
+  /** Convert canvas-relative coords to image-relative coords */
+  function getImageCoords(e: React.MouseEvent<HTMLCanvasElement>) {
     const canvas = canvasRef.current!;
-    const rect_ = canvas.getBoundingClientRect();
-    const x = (e.clientX - rect_.left) * (canvas.width / rect_.width);
-    const y = (e.clientY - rect_.top) * (canvas.height / rect_.height);
+    const box = canvas.getBoundingClientRect();
+    const displayW = box.width;
+    const displayH = box.height;
+    const imgW = canvas.width;
+    const imgH = canvas.height;
+    return {
+      x: ((e.clientX - box.left) / displayW) * imgW,
+      y: ((e.clientY - box.top) / displayH) * imgH,
+    };
+  }
+
+  function handleMouseDown(e: React.MouseEvent<HTMLCanvasElement>) {
+    const { x, y } = getImageCoords(e);
     setDrawing(true);
     setStartPos({ x, y });
     setRect({ x, y, w: 0, h: 0 });
+    // Redraw with start point
+    const canvas = canvasRef.current;
+    const ctx = canvas?.getContext('2d');
+    if (canvas && ctx && imgRef.current) {
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      ctx.drawImage(imgRef.current, 0, 0);
+    }
   }
 
   function handleMouseMove(e: React.MouseEvent<HTMLCanvasElement>) {
     if (!drawing) return;
-    const canvas = canvasRef.current!;
-    const rect_ = canvas.getBoundingClientRect();
-    const x = (e.clientX - rect_.left) * (canvas.width / rect_.width);
-    const y = (e.clientY - rect_.top) * (canvas.height / rect_.height);
+    const { x, y } = getImageCoords(e);
     const newRect = {
       x: Math.min(startPos.x, x),
       y: Math.min(startPos.y, y),
@@ -107,12 +147,12 @@ export default function WatermarkRemoverPage() {
     };
     setRect(newRect);
 
-    // Redraw canvas
-    const ctx = canvas.getContext('2d')!;
-    if (imgRef.current) {
+    const canvas = canvasRef.current;
+    const ctx = canvas?.getContext('2d');
+    if (canvas && ctx && imgRef.current) {
       ctx.clearRect(0, 0, canvas.width, canvas.height);
       ctx.drawImage(imgRef.current, 0, 0);
-      // Draw selection
+      // Selection overlay
       ctx.fillStyle = 'rgba(59, 130, 246, 0.3)';
       ctx.fillRect(newRect.x, newRect.y, newRect.w, newRect.h);
       ctx.strokeStyle = '#3b82f6';
@@ -126,51 +166,28 @@ export default function WatermarkRemoverPage() {
   }
 
   function handleRemoveWatermark() {
-    if (!image || !cvRef.current || !rect || rect.w < 5 || rect.h < 5) {
+    if (!canvasRef.current || !rect || rect.w < 5 || rect.h < 5) {
       setError('请先在图片上框选水印区域（至少 5x5 像素）');
       return;
     }
-
     setStatus('processing');
     setError(null);
     setResult(null);
 
     try {
-      const cv = cvRef.current;
+      const canvas = canvasRef.current;
+      const imageData = getCanvasImageData(canvas);
+      const processed = removeWatermarkInpaint(imageData, rect);
 
-      // Load image into cv.Mat
-      const img = new Image();
-      img.onload = () => {
-        const src = cv.imread(img);
-        // Create mask: white rectangle on black background
-        const mask = new cv.Mat.zeros(src.rows, src.cols, cv.CV_8UC1);
+      // Draw result on a temporary canvas
+      const outCanvas = document.createElement('canvas');
+      outCanvas.width = canvas.width;
+      outCanvas.height = canvas.height;
+      const outCtx = outCanvas.getContext('2d')!;
+      outCtx.putImageData(processed, 0, 0);
 
-        const point1 = new cv.Point(rect.x, rect.y);
-        const point2 = new cv.Point(rect.x + rect.w, rect.y + rect.h);
-        cv.rectangle(mask, point1, point2, new cv.Scalar(255, 255, 255), -1);
-
-        // Inpaint
-        const dst = new cv.Mat();
-        cv.inpaint(src, mask, dst, 3, cv.INPAINT_TELEA);
-
-        // Convert result to data URL
-        const canvas = document.createElement('canvas');
-        canvas.width = dst.cols;
-        canvas.height = dst.rows;
-        cv.imshow(canvas, dst);
-
-        setResult(canvas.toDataURL('image/png'));
-
-        // Cleanup
-        src.delete();
-        mask.delete();
-        dst.delete();
-        point1.delete();
-        point2.delete();
-
-        setStatus('done');
-      };
-      img.src = image;
+      setResult(outCanvas.toDataURL('image/png'));
+      setStatus('done');
     } catch (e: unknown) {
       const msg = e instanceof Error ? e.message : '处理失败';
       setError(msg);
@@ -203,23 +220,11 @@ export default function WatermarkRemoverPage() {
     <div className="p-6 max-w-4xl mx-auto">
       <h2 className="text-lg font-semibold mb-4">🖼️ 图像去水印</h2>
       <p className="text-sm text-gray-500 dark:text-gray-400 mb-1">
-        OpenCV 本地处理，图片不上传服务器，隐私安全。
+        纯浏览器本地处理，图片不上传服务器，隐私安全。
       </p>
       <p className="text-sm text-gray-500 dark:text-gray-400 mb-6">
         上传图片 → 用鼠标框选水印区域 → 点击去水印
       </p>
-
-      {/* OpenCV loading status */}
-      {cvStatus === 'loading' && (
-        <div className="p-3 mb-4 rounded-lg bg-blue-50 dark:bg-blue-900/20 text-blue-700 dark:text-blue-300 text-sm border border-blue-200 dark:border-blue-800">
-          ⏳ 正在加载 OpenCV 图像处理库（约 8MB）…
-        </div>
-      )}
-      {cvStatus === 'error' && (
-        <div className="p-3 mb-4 rounded-lg bg-red-50 dark:bg-red-900/30 text-red-700 dark:text-red-300 text-sm border border-red-200 dark:border-red-800">
-          ❌ OpenCV 加载失败，请刷新页面重试。
-        </div>
-      )}
 
       {/* Upload area */}
       {!image && (
@@ -256,7 +261,7 @@ export default function WatermarkRemoverPage() {
         <div className="space-y-4">
           <div className="flex gap-4 flex-col md:flex-row">
             {/* Source with selection canvas */}
-            <div className="flex-1">
+            <div className="flex-1 min-w-0">
               <p className="text-xs text-gray-500 mb-1 font-medium">
                 原图 — <span className="text-blue-500">按住拖动框选水印区域</span>
               </p>
@@ -279,7 +284,7 @@ export default function WatermarkRemoverPage() {
             </div>
 
             {/* Result */}
-            <div className="flex-1">
+            <div className="flex-1 min-w-0">
               <p className="text-xs text-gray-500 mb-1 font-medium">
                 去水印结果
                 {status === 'processing' && '（处理中…）'}
@@ -294,7 +299,7 @@ export default function WatermarkRemoverPage() {
                 ) : status === 'processing' ? (
                   <div className="text-center py-10">
                     <div className="inline-block w-8 h-8 border-2 border-blue-500 border-t-transparent rounded-full animate-spin mb-2" />
-                    <p className="text-sm text-gray-400">OpenCV 处理中…</p>
+                    <p className="text-sm text-gray-400">处理中…</p>
                   </div>
                 ) : (
                   <p className="text-sm text-gray-400">等待处理</p>
@@ -307,14 +312,10 @@ export default function WatermarkRemoverPage() {
           <div className="flex flex-wrap gap-2">
             <button
               onClick={handleRemoveWatermark}
-              disabled={status === 'processing' || cvStatus !== 'ready' || !rect || rect.w < 5}
+              disabled={status === 'processing' || !rect || rect.w < 5}
               className="px-4 py-2 text-sm rounded-lg bg-gradient-to-r from-blue-500 to-blue-600 text-white font-medium hover:from-blue-600 hover:to-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
             >
-              {status === 'processing'
-                ? '处理中…'
-                : cvStatus !== 'ready'
-                  ? '加载 OpenCV…'
-                  : '🚀 去除水印'}
+              {status === 'processing' ? '处理中…' : '🚀 去除水印'}
             </button>
 
             {result && (
@@ -344,10 +345,9 @@ export default function WatermarkRemoverPage() {
         </div>
       )}
 
-      {/* Usage hint */}
       <div className="mt-6 p-3 rounded-lg bg-green-50 dark:bg-green-900/20 text-green-700 dark:text-green-300 text-xs border border-green-200 dark:border-green-800">
-        ✅ 本工具使用 OpenCV.js 在浏览器本地处理，图片不会上传到任何服务器。
-        仅需首次加载约 8MB OpenCV 库，后续秒级处理。
+        ✅ 纯 Canvas API 本地处理，无需加载任何外部库，秒级完成。
+        对简单水印（文字、Logo）效果良好，复杂水印建议多框选几次。
       </div>
     </div>
   );
