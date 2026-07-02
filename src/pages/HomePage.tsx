@@ -11,6 +11,14 @@ interface ToolCard {
 
 const tools: ToolCard[] = [
   {
+    id: 'text-diff',
+    title: '文本对比工具',
+    desc: '对比两段文本的差异，支持分栏和内联视图、字符级高亮、语法高亮、导航跳转',
+    path: '/text-diff',
+    icon: '≅',
+    color: 'from-emerald-500 to-emerald-600',
+  },
+  {
     id: 'json-formatter',
     title: 'JSON 格式化工具',
     desc: '格式化、压缩、校验 JSON，支持去转义、Unicode/URL 解码、自动格式化、深色模式、历史记录',

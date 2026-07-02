@@ -3,6 +3,7 @@ import { Routes, Route, useNavigate, useLocation } from 'react-router-dom';
 import HomePage from './pages/HomePage';
 import JsonFormatterPage from './pages/JsonFormatterPage';
 import WatermarkRemoverPage from './pages/WatermarkRemoverPage';
+import TextDiffPage from './pages/TextDiffPage';
 
 export default function App() {
   const navigate = useNavigate();
@@ -75,8 +76,10 @@ export default function App() {
           <Route path="/" element={<HomePage />} />
           <Route path="/json-formatter" element={<JsonFormatterPage />} />
           <Route path="/watermark-remover" element={<WatermarkRemoverPage />} />
+          <Route path="/text-diff" element={<TextDiffPage />} />
         </Routes>
       </main>
     </div>
   );
 }
+
