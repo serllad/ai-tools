@@ -1,0 +1,8 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+html, body { margin: 0; height: 100%; }
+#root { height: 100vh; display: flex; flex-direction: column; overflow: hidden; }
+/* 让 CodeMirror 内部 scroller 拥有受约束的高度，从而可滚动 */
+.cm-scroller { overflow: auto !important; }
