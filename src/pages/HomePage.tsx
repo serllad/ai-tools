@@ -12,15 +12,23 @@ interface ToolCard {
 const tools: ToolCard[] = [
   {
     id: 'text-diff',
-    title: '文本对比工具',
-    desc: '对比两段文本的差异，支持分栏和内联视图、字符级高亮、语法高亮、导航跳转',
-    path: '/text-diff',
-    icon: '≅',
-    color: 'from-emerald-500 to-emerald-600',
-  },
-  {
-    id: 'json-formatter',
-    title: 'JSON 格式化工具',
+      title: '文本对比工具',
+      desc: '对比两段文本的差异，支持分栏和内联视图、字符级高亮、语法高亮、导航跳转',
+      path: '/text-diff',
+      icon: '≅',
+      color: 'from-emerald-500 to-emerald-600',
+    },
+    {
+      id: 'text-fx',
+      title: '文字特效生成器',
+      desc: '制作带动画特效的文字 GIF/PNG 图片，支持打字机、闪烁、彩虹、心跳等多种动画效果',
+      path: '/text-fx',
+      icon: '✨',
+      color: 'from-pink-500 to-rose-600',
+    },
+    {
+      id: 'json-formatter',
+      title: 'JSON 格式化工具',
     desc: '格式化、压缩、校验 JSON，支持去转义、Unicode/URL 解码、自动格式化、深色模式、历史记录',
     path: '/json-formatter',
     icon: '{ }',

@@ -3,6 +3,7 @@
 import http.server, json, base64, os
 import cv2
 import numpy as np
+import lama_inpaint
 
 PORT = 8902
 
@@ -28,7 +29,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
 
     def do_GET(self):
         if self.path == "/health":
-            self._send(200, {"status": "ok", "service": "ai-watermark"})
+            self._send(200, {"status": "ok", "service": "ai-watermark", "lama": lama_inpaint.is_available()})
         else:
             self._send(404, {"error": "not found"})
 
@@ -48,7 +49,6 @@ class Handler(http.server.BaseHTTPRequestHandler):
                 return
             h, w = img.shape[:2]
             method = body.get("method", "telea").lower()
-            inpaint_m = cv2.INPAINT_TELEA if method == "telea" else cv2.INPAINT_NS
             mask_b64 = body.get("mask", "")
             if mask_b64:
                 if "base64," in mask_b64:
@@ -60,13 +60,26 @@ class Handler(http.server.BaseHTTPRequestHandler):
                 if mask.shape[0] != h or mask.shape[1] != w:
                     mask = cv2.resize(mask, (w, h), interpolation=cv2.INTER_NEAREST)
                 _, mask = cv2.threshold(mask, 127, 255, cv2.THRESH_BINARY)
-                kernel = np.ones((3, 3), np.uint8)
-                mask = cv2.dilate(mask, kernel, iterations=1)
             else:
                 mask = np.zeros((h, w), dtype=np.uint8)
-            result = cv2.inpaint(img, mask, body.get("radius", 3), inpaint_m)
+
+            used = method
+            if method == "lama" and lama_inpaint.is_available():
+                try:
+                    result = lama_inpaint.inpaint(img, mask)
+                except Exception as e:
+                    print(f"[watermark] lama failed, fallback telea: {e}")
+                    mask_d = cv2.dilate(mask, np.ones((3, 3), np.uint8), iterations=1)
+                    result = cv2.inpaint(img, mask_d, body.get("radius", 3), cv2.INPAINT_TELEA)
+                    used = "telea"
+            else:
+                inpaint_m = cv2.INPAINT_NS if method == "ns" else cv2.INPAINT_TELEA
+                mask_d = cv2.dilate(mask, np.ones((3, 3), np.uint8), iterations=1)
+                result = cv2.inpaint(img, mask_d, body.get("radius", 3), inpaint_m)
+                used = "ns" if method == "ns" else "telea"
+
             _, buffer = cv2.imencode(".png", result)
-            self._send(200, {"image": f"data:image/png;base64,{base64.b64encode(buffer).decode()}"})
+            self._send(200, {"image": f"data:image/png;base64,{base64.b64encode(buffer).decode()}", "method": used})
         except Exception as e:
             self._send(500, {"error": str(e)})
 
@@ -74,6 +87,6 @@ class Handler(http.server.BaseHTTPRequestHandler):
         print(f"[watermark] {args[0]} {args[1]} {args[2]}")
 
 if __name__ == "__main__":
-    s = http.server.HTTPServer(("127.0.0.1", PORT), Handler)
+    s = http.server.ThreadingHTTPServer(("127.0.0.1", PORT), Handler)
     print(f"[watermark] service on {PORT}")
     s.serve_forever()

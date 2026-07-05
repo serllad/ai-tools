@@ -4,6 +4,7 @@ import HomePage from './pages/HomePage';
 import JsonFormatterPage from './pages/JsonFormatterPage';
 import WatermarkRemoverPage from './pages/WatermarkRemoverPage';
 import TextDiffPage from './pages/TextDiffPage';
+import TextFxPage from './pages/TextFxPage';
 
 export default function App() {
   const navigate = useNavigate();
@@ -77,6 +78,7 @@ export default function App() {
           <Route path="/json-formatter" element={<JsonFormatterPage />} />
           <Route path="/watermark-remover" element={<WatermarkRemoverPage />} />
           <Route path="/text-diff" element={<TextDiffPage />} />
+          <Route path="/text-fx" element={<TextFxPage />} />
         </Routes>
       </main>
     </div>

@@ -32,3 +32,6 @@ npm-debug.log*
 .eslintcache
 
 __pycache__/
+
+# ML Model files
+models/
