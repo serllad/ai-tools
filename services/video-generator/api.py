@@ -181,8 +181,10 @@ def generate_video(task_id, description, duration, model_key, clip_duration, res
                 if "2-0" in model_name:
                     inp["generate_audio"] = audio_enabled
             result = run_infsh(["app", "run", model_name], input_data=inp)
-            if result and "video" in result:
-                video_urls.append(result["video"])
+            if result:
+                video_url = result.get("video") or (result.get("output") or {}).get("video")
+                if video_url:
+                    video_urls.append(video_url)
                 task["clips_ok"] = task.get("clips_ok", 0) + 1
             time.sleep(1)
         if not video_urls:
