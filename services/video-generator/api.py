@@ -110,15 +110,14 @@ def run_infsh(args, input_data=None):
     if input_data:
         cmd += ["--input", json.dumps(input_data, ensure_ascii=False)]
     env = os.environ.copy()
-    if not env.get("INFSH_API_KEY"):
-        ep = BASE_DIR.parent.parent / ".env"
-        if ep.exists():
-            for ln in open(ep):
-                if "=" in ln and not ln.startswith("#"):
-                    k, v = ln.strip().split("=", 1)
-                    if k.strip() == "INFSH_API_KEY":
-                        env["INFSH_API_KEY"] = v.strip()
-                        break
+    ep = BASE_DIR.parent.parent / ".env"
+    if ep.exists():
+        for ln in open(ep):
+            if "=" in ln and not ln.startswith("#"):
+                k, v = ln.strip().split("=", 1)
+                if k.strip() == "INFSH_API_KEY":
+                    env["INFSH_API_KEY"] = v.strip()
+                    break
     try:
         result = subprocess.run(cmd, capture_output=True, text=True, timeout=300, stdin=subprocess.DEVNULL, env=env)
     except subprocess.TimeoutExpired:
