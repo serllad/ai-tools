@@ -48,11 +48,14 @@ export default function VideoGeneratorPage() {
 
   const start=async()=>{
     if(!txt.trim())return;
+    const d=+dur||10,cd=+clipDur||10;
+    if(d<10||d>600){setErr('总时长应在 10-600 秒之间');return;}
+    if(cd<4||cd>15){setErr('每段时长应在 4-15 秒之间');return;}
     setGen(true);setErr(null);setS(null);
     try{
       const r=await fetch('/api/video/generate',{
         method:'POST',headers:{'Content-Type':'application/json'},
-        body:JSON.stringify({description:txt.trim(),duration:dur,model,clip_duration:clipDur,resolution:res,ratio,audio_enabled:audioOn}),
+        body:JSON.stringify({description:txt.trim(),duration:+d,model,clip_duration:cd,resolution:res,ratio,audio_enabled:audioOn}),
       });
      const d=await r.json();
      if(d.error){setErr(d.error);setGen(false);return;}
@@ -99,10 +102,10 @@ export default function VideoGeneratorPage() {
 
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
         <div><label className="text-xs text-gray-500 block mb-1">{T.dur}</label>
-          <input type="number" value={dur} onChange={e=>setDur(Math.max(10,+e.target.value))} min={10} max={600}
+          <input type="number" value={dur} onChange={e=>setDur(+e.target.value||10)}
             className="w-full bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg p-2 text-sm focus:border-blue-400" disabled={gen} /></div>
         <div><label className="text-xs text-gray-500 block mb-1">{T.clip}</label>
-          <input type="number" value={clipDur} onChange={e=>setClipDur(Math.max(4,+e.target.value))} min={4} max={15}
+          <input type="number" value={clipDur} onChange={e=>setClipDur(+e.target.value||4)}
             className="w-full bg-gray-50 dark:bg-gray-800 border rounded-lg p-2 text-sm" disabled={gen} /></div>
         <div><label className="text-xs text-gray-500 block mb-1">{T.res}</label>
           <select value={res} onChange={e=>setRes(e.target.value)}
