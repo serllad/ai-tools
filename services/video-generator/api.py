@@ -78,6 +78,19 @@ def api_video(filename):
 @app.route("/api/video/subtitle/<filename>")
 def api_subtitle(filename):
     return send_from_directory(OUTPUT_DIR, filename)
+@app.route("/api/video/outputs")
+def api_outputs():
+    files = []
+    for f in sorted(OUTPUT_DIR.iterdir(), key=lambda p: p.stat().st_mtime, reverse=True):
+        if f.suffix in (".mp4", ".webm", ".mov"):
+            sub = f.with_suffix(".vtt")
+            files.append({
+                "name": f.name,
+                "size": f.stat().st_size,
+                "modified": f.stat().st_mtime,
+                "subtitle": sub.name if sub.exists() else None,
+            })
+    return jsonify(files[:30])
 
 def run_infsh(args, input_data=None):
     cmd = [INFSH_PATH] + args
