@@ -57,12 +57,12 @@ export default function VideoGeneratorPage() {
         method:'POST',headers:{'Content-Type':'application/json'},
         body:JSON.stringify({description:txt.trim(),duration:+d,model,clip_duration:cd,resolution:res,ratio,audio_enabled:audioOn}),
       });
-     const d=await r.json();
-     if(d.error){setErr(d.error);setGen(false);return;}
-      tid.current=d.task_id;
+     const data=await r.json();
+     if(data.error){setErr(data.error);setGen(false);return;}
+      tid.current=data.task_id;
      poll.current=setInterval(async()=>{
         try{
-          const resp=await fetch('/api/video/status/'+d.task_id);
+          const resp=await fetch('/api/video/status/'+data.task_id);
           const st=await resp.json();setS(st);
           if(st.status==='done'||st.status==='error'){clearInterval(poll.current);setGen(false);loadFiles();}
         }catch{clearInterval(poll.current);setGen(false);}
