@@ -35,3 +35,11 @@ __pycache__/
 
 # ML Model files
 models/
+
+# Video generator
+services/video-generator/outputs/
+services/video-generator/work/
+
+# Local CLI config
+.belt/
+services/video-generator/.belt/

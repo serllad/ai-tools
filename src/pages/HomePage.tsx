@@ -42,6 +42,14 @@ const tools: ToolCard[] = [
     icon: '🖼️',
     color: 'from-purple-500 to-purple-600',
   },
+  {
+    id: 'video-generator',
+    title: 'AI 视频生成',
+    desc: '输入文字描述，AI 自动拆分场景、生成多个片段并拼接为完整视频，支持 Seedance / Wan 等多种模型',
+    path: '/video-generator',
+    icon: '🎬',
+    color: 'from-rose-500 to-pink-600',
+  },
 ];
 
 export default function HomePage() {

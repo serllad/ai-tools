@@ -5,6 +5,7 @@ import JsonFormatterPage from './pages/JsonFormatterPage';
 import WatermarkRemoverPage from './pages/WatermarkRemoverPage';
 import TextDiffPage from './pages/TextDiffPage';
 import TextFxPage from './pages/TextFxPage';
+import VideoGeneratorPage from './pages/VideoGeneratorPage';
 
 export default function App() {
   const navigate = useNavigate();
@@ -79,6 +80,7 @@ export default function App() {
           <Route path="/watermark-remover" element={<WatermarkRemoverPage />} />
           <Route path="/text-diff" element={<TextDiffPage />} />
           <Route path="/text-fx" element={<TextFxPage />} />
+          <Route path="/video-generator" element={<VideoGeneratorPage />} />
         </Routes>
       </main>
     </div>
