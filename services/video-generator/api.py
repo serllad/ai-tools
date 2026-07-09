@@ -1,15 +1,16 @@
 #!/usr/bin/env python3
 """AutoVid Video Generator - AI ???? API ??"""
 import json, os, re, subprocess, threading, time, uuid
+import shutil
 from pathlib import Path
 from flask import Flask, request, jsonify, send_from_directory
 
 app = Flask(__name__)
 
 BASE_DIR = Path(__file__).parent
+INFSH_PATH = shutil.which("infsh") or os.path.expanduser("~/.inferencesh-cli/infsh")
 OUTPUT_DIR = BASE_DIR / "outputs"
 WORK_DIR = BASE_DIR / "work"
-INFSH_PATH = os.path.expanduser("~/.inferencesh-cli/infsh")
 PORT = int(os.environ.get("VIDEO_GEN_PORT", "5001"))
 
 tasks: dict[str, dict] = {}
