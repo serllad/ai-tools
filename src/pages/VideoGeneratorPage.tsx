@@ -67,10 +67,10 @@ export default function VideoGeneratorPage() {
           if(st.status==='done'||st.status==='error'){clearInterval(poll.current);setGen(false);loadFiles();}
         }catch{clearInterval(poll.current);setGen(false);}
       },1000);
-    }catch{setErr('Backend not running?');setGen(false);}
+    }catch(e:any){setErr('\u8bf7\u6c42\u5931\u8d25: '+(e?.message||e));setGen(false);}
   };
 
- const rst=()=>{clearInterval(poll.current);setS(null);setGen(false);setErr(null);};
+  const rst=()=>{clearInterval(poll.current);setS(null);setGen(false);setErr(null);};
 
   const cancel=async()=>{
     if(!tid.current)return;
