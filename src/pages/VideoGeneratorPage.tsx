@@ -38,7 +38,8 @@ export default function VideoGeneratorPage() {
   const [gen,setGen]=useState(false);
   const [err,setErr]=useState<string|null>(null);
   const [files,setFiles]=useState<VidFile[]>([]);
-  const poll=useRef<any>(null);
+ const poll=useRef<any>(null);
+  const tid=useRef<string|null>(null);
   const vref=useRef<HTMLVideoElement>(null);
 
   const loadFiles=useCallback(async()=>{try{const r=await fetch('/api/video/outputs');if(r.ok)setFiles(await r.json());}catch{}},[],[]);
@@ -53,9 +54,10 @@ export default function VideoGeneratorPage() {
         method:'POST',headers:{'Content-Type':'application/json'},
         body:JSON.stringify({description:txt.trim(),duration:dur,model,clip_duration:clipDur,resolution:res,ratio,audio_enabled:audioOn}),
       });
-      const d=await r.json();
-      if(d.error){setErr(d.error);setGen(false);return;}
-      poll.current=setInterval(async()=>{
+     const d=await r.json();
+     if(d.error){setErr(d.error);setGen(false);return;}
+      tid.current=d.task_id;
+     poll.current=setInterval(async()=>{
         try{
           const resp=await fetch('/api/video/status/'+d.task_id);
           const st=await resp.json();setS(st);
@@ -65,7 +67,15 @@ export default function VideoGeneratorPage() {
     }catch{setErr('Backend not running?');setGen(false);}
   };
 
-  const rst=()=>{clearInterval(poll.current);setS(null);setGen(false);setErr(null);};
+ const rst=()=>{clearInterval(poll.current);setS(null);setGen(false);setErr(null);};
+
+  const cancel=async()=>{
+    if(!tid.current)return;
+    clearInterval(poll.current);
+    try{await fetch('/api/video/cancel/'+tid.current,{method:'POST'});}catch{}
+    setS((prev:any)=>({...prev,status:'error',message:'\u5df2\u53d6\u6d88'}));
+    setGen(false);
+  };
 
   const clipsOk=s?.clips_ok||0;
   const total=s?.total||0;
@@ -137,7 +147,11 @@ export default function VideoGeneratorPage() {
             <div className="h-full bg-gradient-to-r from-blue-500 to-green-500 rounded-full transition-all duration-500" style={{width:pct+'%'}} />
           </div>
           {s.message&&<p className="text-xs text-gray-400 truncate">{s.message}</p>}
-          {s._last_error&&<p className="text-xs text-red-500">\u9519\u8bef: {s._last_error}</p>}
+         {s._last_error&&<p className="text-xs text-red-500">\u9519\u8bef: {s._last_error}</p>}
+          <button onClick={cancel}
+            className="mt-1 w-full px-3 py-1.5 text-xs rounded-lg bg-red-500 text-white font-medium hover:bg-red-600 transition-colors">
+            \u505c\u6b62\u751f\u6210
+          </button>
         </div>
       )}
 

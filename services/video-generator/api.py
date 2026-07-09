@@ -92,6 +92,18 @@ def api_outputs():
             })
     return jsonify(files[:30])
 
+@app.route("/api/video/cancel/<task_id>", methods=["POST"])
+def api_cancel(task_id):
+    with tasks_lock:
+        task = tasks.get(task_id)
+        if not task:
+            return jsonify({"error": "task not found"}), 404
+        if task["status"] in ("done", "error"):
+            return jsonify({"error": "task already finished"}), 400
+        task["status"] = "error"
+        task["message"] = "Cancelled by user"
+    return jsonify({"ok": True})
+
 def run_infsh(args, input_data=None):
     cmd = [INFSH_PATH] + args
     if input_data:
@@ -156,6 +168,10 @@ def generate_video(task_id, description, duration, model_key, clip_duration, res
         task["segments"] = segments
         video_urls = []
         for i, prompt in enumerate(segments):
+            # Check for cancellation
+            if task.get("status") == "error":
+                task["message"] = "Cancelled"
+                return
             task["current"] = i + 1
             task["stage"] = f"Generating clip {i+1}/{len(segments)}"
             task["message"] = prompt[:60]
