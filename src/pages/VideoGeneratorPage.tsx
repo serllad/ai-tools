@@ -64,7 +64,7 @@ export default function VideoGeneratorPage() {
         try{
           const resp=await fetch('/api/video/status/'+data.task_id);
           const st=await resp.json();setS(st);
-          if(st.status==='done'||st.status==='error'){clearInterval(poll.current);setGen(false);loadFiles();}
+          if(st.status==='done'){clearInterval(poll.current);setGen(false);loadFiles();}if(st.status==='error'){clearInterval(poll.current);setGen(false);setErr(st.message||'生成失败');loadFiles();}
         }catch{clearInterval(poll.current);setGen(false);}
       },1000);
     }catch(e:any){setErr('\u8bf7\u6c42\u5931\u8d25: '+(e?.message||e));setGen(false);}
